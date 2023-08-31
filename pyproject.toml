@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PyPop"
+authors = [
+    {name = "Ulrich Dobramysl", email = "ulrich.dobramysl@gmail.com"},
+]
+description = "An educational python module to explore stochastic population dynamics."
+readme = "README.md"
+requires-python = ">=3.7"
+keywords = ["population dynamics", "simulations"]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "numpy >= 1.25.0",
+]
+dynamic = ["version"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
