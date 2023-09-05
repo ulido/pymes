@@ -252,7 +252,11 @@ class World:
     def __init__(self, size: tuple[int, int], initial_densities: dict[Species, float], hops: dict[Species, Hop], reactions: dict[Species, list[Reaction]], seed=None):
         """Initialize a world of the given `size` (e.g. 256x256), with the given `initial_densities`, hop reactions `hops` and inter-occupant `reactions`. Optionally the initial random `seed` can be specified."""
         self.lattice: Lattice = Lattice(size)
-        self.species: list[Species] = list(initial_densities.keys())
+        density_species = set(initial_densities.keys())
+        hop_species = set(hops.keys())
+        reaction_species = set(reactions.keys())
+        self.species: list[Species] = list(set.union(density_species, hop_species, reaction_species))
+
         self.hops: dict[Species, Hop] = hops
         self.reactions: dict[Species, Reaction] = reactions
 
