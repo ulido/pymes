@@ -23,10 +23,20 @@ dynamic = ["version"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.coverage.paths]
+source = [
+    "src/",
+    ".tox/mypy/lib/python*/site-packages/",
+    ".tox/py*/lib/python*/site-packages/",
+]
+
 [tool.tox]
 legacy_tox_ini = """
 [tox]
-envlist = py37, py38, py39, py310, mypy
+envlist = clean, py37, py38, py39, py310, mypy, report
+
+[tool:pytest]
+testpaths = tests
 
 [gh-actions]
 python =
@@ -36,4 +46,34 @@ python =
     3.10: py310, mypy
 
 [testenv]
+description = install pytest in a virtual environment and invoke it on the tests folder
+setenv =
+    COVERAGE_FILE = .coverage.{envname}
+deps =
+    scipy
+    pytest>=7
+    pytest-sugar
+    coverage
+    pytest-cov
+allowlist_externals = /bin/bash
+commands =
+    coverage run --source {envsitepackagesdir}/pypop -a -m pytest -rP --cov-report=term-missing {posargs:-vv}
+depends =
+    {py37,py38,py39,py310,mypy}: clean
+    report: py37,py38,py39,py310,mypy
+
+[testenv:report]
+description = provide coverage reports
+skip_install = true
+deps = coverage
+allowlist_externals = /bin/bash
+commands =
+    /bin/bash -c 'coverage combine --keep .coverage.*'
+    coverage html
+    coverage report --fail-under=100
+
+[testenv:clean]
+deps = coverage
+skip_install = true
+commands = /bin/bash -c 'rm .coverage.*'
 """
