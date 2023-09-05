@@ -93,8 +93,6 @@ class Occupant:
         """Initialize a new site occupant of the given `species` at the `initial_site`."""
         self.id = next(occupant_counter)
 
-        #self._site_entry = LinkedListNode(self)
-
         self.species = species
         self.species.add(self)
         self.site = initial_site
@@ -271,7 +269,6 @@ class World:
                 for _ in range(self.random_generator.poisson(density)):
                     Occupant(species, site)
 
-    #@profile
     def iteration(self):
         """Perform one iteration (part of a step)."""
         # Find how many occupants of each species there are currently on the lattice.
