@@ -58,6 +58,7 @@ deps =
 allowlist_externals = /bin/bash
 commands =
     coverage run --source {envsitepackagesdir}/pypop -a -m pytest -rP --cov-report=term-missing {posargs:-vv}
+    coverage report --show-missing --ignore-errors
 depends =
     {py37,py38,py39,py310,mypy}: clean
     report: py37,py38,py39,py310,mypy
