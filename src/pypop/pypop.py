@@ -201,9 +201,14 @@ class PredationReaction(Reaction):
     def __call__(self, occupant: Occupant, rng: np.random.Generator) -> bool:
         """For each victim of `speciesB` on the `occupant`'s lattice site, decides if predation reaction occurs. If yes, destroys the `speciesB` victim. Returns `False` because the predation reaction never destroys the original `occupant`."""
         site: Site = occupant.site
+        # Need to collect victims that should be destroyed and destroy them later.
+        # Otherwise the list we are iterating over will change during iteration!
+        to_destroy = []
         for victim in site.species_occupants[self.speciesB]:
             if self.decide(rng):
-                victim.destroy()
+                to_destroy.append(victim)
+        for victim in to_destroy:
+            victim.destroy()
 
         return False
         
@@ -218,10 +223,15 @@ class PredationBirthReaction(Reaction):
     def __call__(self, occupant: Occupant, rng: np.random.Generator) -> bool:
         """For each victim of `speciesB` on the `occupant`'s lattice site, decides if predation reaction occurs. If yes, destroys the `speciesB` victim and creates a new occupant of `speciesA`. Returns `False` because the predation reaction never destroys the original `occupant`."""
         site: Site = occupant.site
+        # Need to collect victims that should be destroyed and destroy them later.
+        # Otherwise the list we are iterating over will change during iteration!
+        to_destroy = []
         for victim in site.species_occupants[self.speciesB]:
             if self.decide(rng):
-                victim.destroy()
-                new_occupant = Occupant(occupant.species, site)
+                to_destroy.append(victim)
+        for victim in to_destroy:
+            victim.destroy()
+            new_occupant = Occupant(occupant.species, site)
         
         return False
 
