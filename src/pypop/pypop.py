@@ -282,8 +282,6 @@ class World:
                 occupant: Occupant = species.members[selected_index]
                 break
             selected_index -= N
-        else:
-            raise ValueError("Selected an index beyond the total number of species members!")
 
         # Let the occupant hop to a neighboring site.
         species: Species = occupant.species
@@ -320,37 +318,3 @@ class World:
         """Return the current abundances of all species on each lattice site as arrays."""
         return {species.name: np.array([site.species_abundance(species) for site in self.lattice.sites]).reshape(self.lattice.size)
                 for species in self.species}
-
-if __name__ == '__main__':
-    from tqdm.auto import tqdm
-
-    species: list[Species] = [
-        Species("A"),
-        Species("B")
-    ]
-
-    hops: dict[Species, Hop] = {
-        species[0]: Hop(species[0], 1.0),
-        species[1]: Hop(species[1], 1.0),
-    }
-
-    reactions: dict[Species, Reaction] = {
-        species[1]: [
-            BirthReaction(species[1], 0.075)
-        ],
-        species[0]: [
-            DeathReaction(species[0], 0.1),
-            PredationBirthReaction(species[0], species[1], 0.5),
-        ]
-    }
-
-    world = World((100, 100), species, hops, reactions, seed=4)
-    for i in range(1*world.lattice.nr_sites):
-        for s in species:
-            site = world.lattice.sites[world.random_generator.choice(world.lattice.nr_sites)]
-            Occupant(s, site)
-    
-    for _ in range(100):
-        world.step()
-        print([len(s) for s in species])
-    print(world.asarrays())
