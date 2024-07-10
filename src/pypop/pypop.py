@@ -9,6 +9,7 @@ import itertools
 __all__ = [
     "World",
     "Species",
+    "Occupant",
     "Hop",
     "BirthReaction",
     "DeathReaction",
