@@ -29,10 +29,10 @@ class Species:
     def add(self, occupant: Occupant):
         """Add a new `occupant` to this species."""
         assert occupant.species == self
-        occupant._species_index: int = len(self.members)
+        occupant._species_index = len(self.members)
         self.members.append(occupant)
 
-    def remove(self, occupant):
+    def remove(self, occupant: Occupant):
         """Remove an `occupant` from this species (i.e. the occupant dies)."""
         index: int = occupant._species_index
         end: Occupant = self.members.pop()
@@ -76,7 +76,7 @@ class Site:
     def add(self, occupant: Occupant):
         """Add an `occupant` to this lattice site."""
         occupants: list[Occupant] = self.species_occupants[occupant.species]
-        occupant._site_index: int = len(occupants)
+        occupant._site_index = len(occupants)
         occupants.append(occupant)
 
     def remove(self, occupant: Occupant):
@@ -98,6 +98,9 @@ occupant_counter = itertools.count()
 
 class Occupant:
     """Describes a lattice site occupant."""
+
+    _site_index: int
+    _species_index: int
 
     def __init__(self, species: Species, initial_site: Site):
         """Initialize a new site occupant of the given `species` at the `initial_site`."""
