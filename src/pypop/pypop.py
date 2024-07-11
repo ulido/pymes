@@ -1,5 +1,4 @@
 from __future__ import annotations
-import site
 import numpy as np
 import numpy.typing as npt
 
@@ -51,14 +50,19 @@ class Species:
         return self.name
 
 
+class SiteFullException(Exception):
+    pass
+
+
 class Site:
     """Describes a lattice site."""
 
-    def __init__(self, id):
+    def __init__(self, id, carrying_capacity: int | None = None):
         """Initialize a new lattice site with a unique `id`."""
         self.id = id
         self.species_occupants: dict[Species, list[Occupant]] = defaultdict(list)
         self.neighbors: list[Site] = []
+        self.carrying_capacity = carrying_capacity
 
     def species_abundance(self, species: Species) -> int:
         """Returns the abundance of the given `species` at this lattice site."""
@@ -76,6 +80,10 @@ class Site:
 
     def add(self, occupant: Occupant):
         """Add an `occupant` to this lattice site."""
+        if self.carrying_capacity is not None:
+            nr_occupants = sum([len(species_occupants) for species_occupants in self.species_occupants.values()])
+            if nr_occupants >= self.carrying_capacity:
+                raise SiteFullException()
         occupants: list[Occupant] = self.species_occupants[occupant.species]
         occupant._site_index = len(occupants)
         occupants.append(occupant)
@@ -105,12 +113,13 @@ class Occupant:
 
     def __init__(self, species: Species, initial_site: Site):
         """Initialize a new site occupant of the given `species` at the `initial_site`."""
+        self.species = species
+        initial_site.add(self) # Do this first, because it can fail when carrying capacity is reached.
+        self.site = initial_site
+
         self.id = next(occupant_counter)
 
-        self.species = species
         self.species.add(self)
-        self.site = initial_site
-        self.site.add(self)
 
     def destroy(self):
         """Destroys the occupant. Removes it from its current lattice site and from the global species list."""
@@ -119,9 +128,26 @@ class Occupant:
 
     def set_site(self, site: Site):
         """Moves the occupant to a new `site`. Removes it from the old site."""
-        self.site.remove(self)
-        site.add(self)
-        self.site = site
+        original_site = self.site
+        original_site.remove(self)
+        try:
+            site.add(self)
+            self.site = site
+        except SiteFullException:
+            original_site.add(self)
+            raise
+
+    def swap_sites(self, other: Occupant):
+        """Swap sites with another occupant of another site."""
+        # We need this for the case of a single occupancy simulation
+        original_site = self.site
+        new_site = other.site
+        original_site.remove(self)
+        new_site.remove(other)
+        new_site.add(self)
+        original_site.add(other)
+        self.site = new_site
+        other.site = original_site
 
     def __hash__(self):
         return self.id
@@ -133,13 +159,14 @@ class Occupant:
 class Lattice:
     """Describes a 2D lattice."""
 
-    def __init__(self, size: tuple[int, int]):
+    def __init__(self, size: tuple[int, int], carrying_capacity: int | None):
         """Initialize a lattice with the given `size` (e.g. 256x256 sites)."""
         self.size: tuple[int, int] = size
         self.nr_sites = self.size[0] * self.size[1]
+        self.carrying_capacity = carrying_capacity
         # Linear list of sites, where the site IDs are given as the xy index coordinates.
         self.sites: list[Site] = [
-            Site(f"{i}x{j}") for i in range(size[0]) for j in range(size[1])
+            Site(f"{i}x{j}", carrying_capacity=carrying_capacity) for i in range(size[0]) for j in range(size[1])
         ]
         i: int
         site: Site
@@ -192,8 +219,21 @@ class BirthReaction(Reaction):
 
     def __call__(self, occupant: Occupant, rng: np.random.Generator) -> bool:
         """Decides if birth reaction occurs for the given `occupant` (using the random generator `rng`) and if yes, generates a new occupant of the same species at the `occupant`'s site. Returns `False` because the `occupant` will never be destroyed in a birth reaction."""
+        site = occupant.site
         if self.decide(rng):
-            new_occupant = Occupant(occupant.species, occupant.site)
+            if site.carrying_capacity == 1:
+                # Try every neighbor site until we find an empty one (if there is one).
+                for new_site in rng.choice(site.neighbors, size=len(site.neighbors)):
+                    try:
+                        new_occupant = Occupant(occupant.species, new_site)
+                    except SiteFullException:
+                        continue
+                    break
+            else:
+                try:
+                    new_occupant = Occupant(occupant.species, site)
+                except SiteFullException:
+                    pass
         return False
 
 
@@ -225,10 +265,17 @@ class PredationReaction(Reaction):
     def __call__(self, occupant: Occupant, rng: np.random.Generator) -> bool:
         """For each victim of `speciesB` on the `occupant`'s lattice site, decides if predation reaction occurs. If yes, destroys the `speciesB` victim. Returns `False` because the predation reaction never destroys the original `occupant`."""
         site: Site = occupant.site
+
+        # If the carrying capacity is one, we need to reach out to neighboring sites.
+        if site.carrying_capacity == 1:
+            potential_victims = [occupant for neighbor in site.neighbors for occupant in neighbor.species_occupants[self.speciesB]]
+        else:
+            potential_victims = site.species_occupants[self.speciesB]
+        
         # Need to collect victims that should be destroyed and destroy them later.
         # Otherwise the list we are iterating over will change during iteration!
-        to_destroy = []
-        for victim in site.species_occupants[self.speciesB]:
+        to_destroy: list[Occupant] = []
+        for victim in potential_victims:
             if self.decide(rng):
                 to_destroy.append(victim)
         for victim in to_destroy:
@@ -249,15 +296,26 @@ class PredationBirthReaction(Reaction):
     def __call__(self, occupant: Occupant, rng: np.random.Generator) -> bool:
         """For each victim of `speciesB` on the `occupant`'s lattice site, decides if predation reaction occurs. If yes, destroys the `speciesB` victim and creates a new occupant of `speciesA`. Returns `False` because the predation reaction never destroys the original `occupant`."""
         site: Site = occupant.site
+
+        # If the carrying capacity is one, we need to reach out to neighboring sites.
+        if site.carrying_capacity == 1:
+            potential_victims = [occupant for neighbor in site.neighbors for occupant in neighbor.species_occupants[self.speciesB]]
+        else:
+            potential_victims = site.species_occupants[self.speciesB]
+        
         # Need to collect victims that should be destroyed and destroy them later.
         # Otherwise the list we are iterating over will change during iteration!
-        to_destroy = []
-        for victim in site.species_occupants[self.speciesB]:
+        to_destroy: list[Occupant] = []
+        for victim in potential_victims:
             if self.decide(rng):
                 to_destroy.append(victim)
         for victim in to_destroy:
-            victim.destroy()
-            new_occupant = Occupant(occupant.species, site)
+            try:
+                new_site = victim.site
+                victim.destroy()
+                new_occupant = Occupant(occupant.species, new_site)
+            except SiteFullException:
+                break
 
         return False
 
@@ -272,8 +330,20 @@ class Hop(Reaction):
 
     def __call__(self, occupant: Occupant, destination_index):
         """Hop the given `occupant` from its original site to the site with neighbor index `destination_index` (between 0 and 3 inclusive)."""
-        destination: Site = occupant.site.neighbors[destination_index]
-        occupant.set_site(destination)
+        site = occupant.site
+        destination: Site = site.neighbors[destination_index]
+        if site.carrying_capacity == 1:
+            other_occupants = [occupant for species_occupants in destination.species_occupants.values() for occupant in species_occupants]
+            if len(other_occupants) == 0:
+                occupant.set_site(destination)
+            else:
+                # Since carrying capacity is one, we can guarantee that there is a single occupant on the destination site.
+                occupant.swap_sites(other_occupants[0])
+        else:
+            try:
+                occupant.set_site(destination)
+            except SiteFullException:
+                pass
 
 
 class World:
@@ -285,10 +355,11 @@ class World:
         initial_densities: dict[Species, float],
         hops: dict[Species, Hop],
         reactions: dict[Species, list[Reaction]],
+        carrying_capacity: int | None=None,
         seed=None,
     ):
         """Initialize a world of the given `size` (e.g. 256x256), with the given `initial_densities`, hop reactions `hops` and inter-occupant `reactions`. Optionally the initial random `seed` can be specified."""
-        self.lattice: Lattice = Lattice(size)
+        self.lattice: Lattice = Lattice(size, carrying_capacity)
         density_species = set(initial_densities.keys())
         hop_species = set(hops.keys())
         reaction_species = set(reactions.keys())
@@ -305,10 +376,28 @@ class World:
 
     def initialization(self, densities: dict[Species, float]):
         """Seed the initial occupants on the lattice."""
-        for site in self.lattice.sites:
+        if self.lattice.carrying_capacity is None:
+            for site in self.lattice.sites:
+                for species, density in densities.items():
+                    for _ in range(self.random_generator.poisson(density)):
+                        Occupant(species, site)
+        else:
+            N = self.lattice.nr_sites
+            total_density = sum(densities.values())
+            if total_density > self.lattice.carrying_capacity:
+                raise ValueError("Cannot place particles since total density of all species exceeds the carrying capacity.")
+            
+            to_place = []
             for species, density in densities.items():
-                for _ in range(self.random_generator.poisson(density)):
-                    Occupant(species, site)
+                to_place.extend(int(N*density) * [species])
+            self.random_generator.shuffle(to_place)
+
+            candidate_sites = self.lattice.carrying_capacity * self.lattice.sites
+            self.random_generator.shuffle(candidate_sites)
+
+            for species, site in zip(to_place, candidate_sites):
+                Occupant(species, site)
+
 
     def iteration(self):
         """Perform one iteration (part of a step)."""
