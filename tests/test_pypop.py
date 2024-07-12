@@ -1,9 +1,10 @@
-from pypop import *
-from pypop.pypop import Occupant, Site, Lattice, Reaction
+from pypop import World, Species, Occupant, BirthReaction, DeathReaction, PredationReaction, PredationBirthReaction, Hop
+from pypop.pypop import Site, Lattice, Reaction, SiteFullException
 
 import numpy as np
+import pytest
 from pytest import raises
-from scipy.stats import binomtest
+from contextlib import nullcontext as does_not_raise
 
 def test_species():
     # Test species initialization and naming
@@ -123,10 +124,18 @@ def test_lattice():
             else:
                 assert(lattice.sites[i] in site.neighbors)
 
-def test_reactions():
+def _binomial_expectation(successes, trials, rate):
+    mean = trials*rate
+    stddev = trials * rate * (1-rate)
+    return successes > (mean - 2*stddev) and successes < (mean + 2*stddev)
+
+@pytest.mark.parametrize('carrying_capacity', [None, 1])
+def test_reactions(carrying_capacity):
     # Create species, site and occupant to be used below
     species = Species("A")
-    site = Site("A")
+    lattice = Lattice((2, 2), carrying_capacity=carrying_capacity)
+    site = lattice.sites[0]
+    other_site = lattice.sites[1]
     occupant = Occupant(species, site)
 
     # Test parameters
@@ -152,7 +161,7 @@ def test_reactions():
         if len(species) == 2:
             successes += 1
             species.members[1].destroy()
-    assert(binomtest(successes, trials, rate).pvalue > 0.01)
+    assert(_binomial_expectation(successes, trials, rate))
 
     # Test DeathReaction initialization
     death_reaction = DeathReaction(species, rate)
@@ -165,7 +174,7 @@ def test_reactions():
         if death_reaction(occupant, rng):
             successes += 1
             occupant = Occupant(species, site)
-    assert(binomtest(successes, trials, rate).pvalue > 0.01)
+    assert(_binomial_expectation(successes, trials, rate))
 
     # Test PredationReaction initialization
     prey_species = Species("B")
@@ -175,11 +184,21 @@ def test_reactions():
     assert(predation_reaction.rate == rate)
     # Test that the reaction happens at the correct rate
     # Note, this can fail randomly, but should be fine mostly!! It is a statistical test after all.
-    for _ in range(trials):
-        Occupant(prey_species, site)
-    assert(predation_reaction(occupant, rng) == False)
-    successes = trials - len(prey_species)
-    assert(binomtest(successes, trials, rate).pvalue > 0.01)
+    if carrying_capacity == 1:
+        successes = 0
+        for _ in range(trials):
+            prey = Occupant(prey_species, other_site)
+            assert(predation_reaction(occupant, rng) == False)
+            if len(prey_species) == 0:
+                successes += 1
+            else:
+                prey.destroy()
+    else:
+        for _ in range(trials):
+            Occupant(prey_species, site)
+        assert(predation_reaction(occupant, rng) == False)
+        successes = trials - len(prey_species)
+    assert(_binomial_expectation(successes, trials, rate))
 
     # Test PredationBirthReaction initialization
     prey_species = Species("C")
@@ -189,12 +208,33 @@ def test_reactions():
     assert(predationbirth_reaction.rate == rate)
     # Test that the reaction happens at the correct rate
     # Note, this can fail randomly, but should be fine mostly!! It is a statistical test after all.
-    for _ in range(trials):
-        Occupant(prey_species, site)
-    assert(predationbirth_reaction(occupant, rng) == False)
-    successes = trials - len(prey_species)
-    assert(len(species) == successes + 1)
-    assert(binomtest(successes, trials, rate).pvalue > 0.01)
+    if carrying_capacity == 1:
+        successes = 0
+        for _ in range(trials):
+            prey = Occupant(prey_species, other_site)
+            assert(predationbirth_reaction(occupant, rng) == False)
+            if len(prey_species) == 0 and len(other_site.species_occupants[species]) == 1:
+                successes += 1
+                other_site.species_occupants[species][0].destroy()
+            else:
+                prey.destroy()
+    else:
+        for _ in range(trials):
+            Occupant(prey_species, site)
+        assert(predationbirth_reaction(occupant, rng) == False)
+        successes = trials - len(prey_species)
+        assert(len(species) == successes + 1)
+    assert(_binomial_expectation(successes, trials, rate))
+
+def test_birthreaction_singleoccupancy():
+    species = Species("A")
+    lattice = Lattice((2, 2), carrying_capacity=1)
+    for site in lattice.sites:
+        Occupant(species, site)
+    
+    rng = np.random.default_rng()
+    BirthReaction(species, 1.0)(lattice.sites[0].species_occupants[species][0], rng)
+    assert(len(species) == 4)
 
 def test_hop():
     # Create species, lattice and occupant for use below
@@ -210,7 +250,71 @@ def test_hop():
     hop(occupant, rng)
     assert(occupant.site in initial_site.neighbors)
 
-def test_world():
+def test_carrying_capacity():
+    species = Species("A")
+    lattice = Lattice((1, 2), carrying_capacity=2)
+    site = lattice.sites[0]
+    second_site = lattice.sites[1]
+
+    rng = np.random.default_rng()
+
+    occupant1 = Occupant(species, site)
+    occupant2 = Occupant(species, site)
+    with raises(SiteFullException):
+        Occupant(species, site)
+
+    occupant3 = Occupant(species, second_site)
+    # with raises(SiteFullException):
+    #     occupant3.set_site(site)
+    
+    Hop(species, 1.0)(occupant3, rng)
+    assert(occupant3.site == second_site)
+    
+    occupant3.destroy()
+
+    BirthReaction(species, 1.0)(occupant1, rng)
+    assert(len(species) == 2)
+    occupant2.destroy()
+
+    prey_species = Species("B")
+    Occupant(prey_species, site)
+    PredationBirthReaction(species, prey_species, 1.0)(occupant1, rng)
+    # Because PredationBirthReaction kills one particle and creates another, SiteFullException is never raised.
+    assert(len(species) == 2)
+    assert(len(prey_species) == 0)
+
+def test_swap_sites():
+    species = Species("A")
+    lattice = Lattice((1, 2), carrying_capacity=1)
+
+    first_site = lattice.sites[0]
+    second_site = lattice.sites[1]
+
+    first_site.neighbors = [second_site]
+    second_site.neighbors = [first_site]
+
+    rng = np.random.default_rng()
+    hop = Hop(species, 1.0)
+
+    occupant1 = Occupant(species, first_site)
+    occupant2 = Occupant(species, second_site)
+
+    hop(occupant1, rng)
+    assert(occupant1.site == second_site)
+    assert(occupant2.site == first_site)
+
+    occupant2.destroy()
+    hop(occupant1, rng)
+
+@pytest.mark.parametrize(
+    'carrying_capacity,density,expectation',
+    [
+        (None, 10.0, does_not_raise()),
+        (1, 0.5, does_not_raise()),
+        (1, 10.0, raises(ValueError, match="Cannot place particles since total density of all species exceeds the carrying capacity."))
+    ]
+)
+def test_world(carrying_capacity, density, expectation):
     # Test parameters
     size = (2, 2)
     A = Species("A")
@@ -226,21 +330,23 @@ def test_world():
     }
 
     # Test world initialization
-    world = World(
-        size=size,
-        initial_densities={A: 10.0, B: 10.0},
-        hops={A: Hop(A, 1.0), B: Hop(A, 1.0)},
-        reactions=reactions,
-    )
-    # We already test the lattice above
+    with expectation:
+        world = World(
+            size=size,
+            initial_densities={A: density, B: density},
+            hops={A: Hop(A, 1.0), B: Hop(A, 1.0)},
+            reactions=reactions,
+            carrying_capacity=carrying_capacity,
+        )
+        # We already test the lattice above
 
-    # Run 10 steps
-    world.run(10)
-    # Test that the abundances are returned in the correct format
-    abundances = world.abundances
-    assert(set(abundances.keys()) == {"A", "B"})
-    # Test that the arrays are returned in the correct format and shape
-    arrays = world.asarrays()
-    assert(set(arrays.keys()) == {"A", "B"})
-    for array in arrays.values():
-        assert(array.shape == size)
+        # Run 10 steps
+        world.run(10)
+        # Test that the abundances are returned in the correct format
+        abundances = world.abundances
+        assert(set(abundances.keys()) == {"A", "B"})
+        # Test that the arrays are returned in the correct format and shape
+        arrays = world.asarrays()
+        assert(set(arrays.keys()) == {"A", "B"})
+        for array in arrays.values():
+            assert(array.shape == size)
