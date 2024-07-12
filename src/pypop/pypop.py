@@ -310,12 +310,10 @@ class PredationBirthReaction(Reaction):
             if self.decide(rng):
                 to_destroy.append(victim)
         for victim in to_destroy:
-            try:
-                new_site = victim.site
-                victim.destroy()
-                new_occupant = Occupant(occupant.species, new_site)
-            except SiteFullException:
-                break
+            # Because PredationBirthReaction kills one particle and creates another, SiteFullException is never raised.
+            new_site = victim.site
+            victim.destroy()
+            new_occupant = Occupant(occupant.species, new_site)
 
         return False
 
