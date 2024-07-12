@@ -4,6 +4,7 @@ dependencies:
   - matplotlib
   - ipywidgets
   - tqdm
+  - scipy
   - pip
   - pip:
     - git+https://github.com/ulido/pypop
