@@ -1,0 +1,8 @@
+name: PyPop
+dependencies:
+  - python=3.12
+  - matplotlib
+  - ipywidgets
+  - tqdm
+  - pip:
+    - git+https://github.com/ulido/pypop
