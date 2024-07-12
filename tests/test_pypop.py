@@ -207,7 +207,7 @@ def test_hop():
     # Test hop reaction initialization
     hop = Hop(species, 1.0)
     # Test that the occupant actually hops to a neighboring site
-    hop(occupant, rng.integers(4))
+    hop(occupant, rng)
     assert(occupant.site in initial_site.neighbors)
 
 def test_world():

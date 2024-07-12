@@ -159,7 +159,7 @@ class Occupant:
 class Lattice:
     """Describes a 2D lattice."""
 
-    def __init__(self, size: tuple[int, int], carrying_capacity: int | None):
+    def __init__(self, size: tuple[int, int], carrying_capacity: int | None=None):
         """Initialize a lattice with the given `size` (e.g. 256x256 sites)."""
         self.size: tuple[int, int] = size
         self.nr_sites = self.size[0] * self.size[1]
