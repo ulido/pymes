@@ -328,22 +328,23 @@ class Hop(Reaction):
         self.species: Species = species
         super().__init__(rate)
 
-    def __call__(self, occupant: Occupant, destination_index):
+    def __call__(self, occupant: Occupant, rng: np.random.Generator):
         """Hop the given `occupant` from its original site to the site with neighbor index `destination_index` (between 0 and 3 inclusive)."""
-        site = occupant.site
-        destination: Site = site.neighbors[destination_index]
-        if site.carrying_capacity == 1:
-            other_occupants = [occupant for species_occupants in destination.species_occupants.values() for occupant in species_occupants]
-            if len(other_occupants) == 0:
-                occupant.set_site(destination)
+        if self.decide(rng):
+            site = occupant.site
+            destination: Site = rng.choice(site.neighbors)
+            if site.carrying_capacity == 1:
+                other_occupants = [occupant for species_occupants in destination.species_occupants.values() for occupant in species_occupants]
+                if len(other_occupants) == 0:
+                    occupant.set_site(destination)
+                else:
+                    # Since carrying capacity is one, we can guarantee that there is a single occupant on the destination site.
+                    occupant.swap_sites(other_occupants[0])
             else:
-                # Since carrying capacity is one, we can guarantee that there is a single occupant on the destination site.
-                occupant.swap_sites(other_occupants[0])
-        else:
-            try:
-                occupant.set_site(destination)
-            except SiteFullException:
-                pass
+                try:
+                    occupant.set_site(destination)
+                except SiteFullException:
+                    pass
 
 
 class World:
@@ -417,7 +418,7 @@ class World:
         # Let the occupant hop to a neighboring site.
         species: Species = occupant.species
         if species in self.hops:
-            self.hops[species](occupant, self.random_generator.integers(4))
+            self.hops[species](occupant, self.random_generator)
 
         # Perform all reactions for the given occupant
         reaction: Reaction
