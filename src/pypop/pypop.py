@@ -268,7 +268,7 @@ class PredationReaction(Reaction):
 
         # If the carrying capacity is one, we need to reach out to neighboring sites.
         if site.carrying_capacity == 1:
-            potential_victims = [occupant for neighbor in site.neighbors for occupant in neighbor.species_occupants[self.speciesB]]
+            potential_victims = {occupant for neighbor in site.neighbors for occupant in neighbor.species_occupants[self.speciesB]}
         else:
             potential_victims = site.species_occupants[self.speciesB]
         
@@ -299,7 +299,7 @@ class PredationBirthReaction(Reaction):
 
         # If the carrying capacity is one, we need to reach out to neighboring sites.
         if site.carrying_capacity == 1:
-            potential_victims = [occupant for neighbor in site.neighbors for occupant in neighbor.species_occupants[self.speciesB]]
+            potential_victims = {occupant for neighbor in site.neighbors for occupant in neighbor.species_occupants[self.speciesB]}
         else:
             potential_victims = site.species_occupants[self.speciesB]
         
