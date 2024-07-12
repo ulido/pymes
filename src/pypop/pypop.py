@@ -358,7 +358,7 @@ class World:
         carrying_capacity: int | None=None,
         seed=None,
     ):
-        """Initialize a world of the given `size` (e.g. 256x256), with the given `initial_densities`, hop reactions `hops` and inter-occupant `reactions`. Optionally the initial random `seed` can be specified."""
+        """Initialize a world of the given `size` (e.g. 256x256), with the given `initial_densities`, hop reactions `hops` and inter-occupant `reactions`. The `carrying_capacity` is `None` per default, meaning site occupancy is unlimited. A positive integer value of the `carrying_capacity` parameter provides a limit to the number of particles per site. If `carrying_capacity=1`, reactions between two particles occur between neighboring sites instead of on-site and hops switch the positions of particles on neighboring sites. Optionally the initial random `seed` can be specified."""
         self.lattice: Lattice = Lattice(size, carrying_capacity)
         density_species = set(initial_densities.keys())
         hop_species = set(hops.keys())
