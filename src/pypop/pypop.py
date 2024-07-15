@@ -32,6 +32,9 @@ class Species:
         occupant._species_index = len(self.members)
         self.members.append(occupant)
 
+    def create_occupant(self, initial_site: Site) -> Occupant:
+        return Occupant(self, initial_site)
+
     def remove(self, occupant: Occupant):
         """Remove an `occupant` from this species (i.e. the occupant dies)."""
         index: int = occupant._species_index
@@ -225,13 +228,13 @@ class BirthReaction(Reaction):
                 # Try every neighbor site until we find an empty one (if there is one).
                 for new_site in rng.choice(site.neighbors, size=len(site.neighbors)):
                     try:
-                        new_occupant = Occupant(occupant.species, new_site)
+                        occupant.species.create_occupant(new_site)
                     except SiteFullException:
                         continue
                     break
             else:
                 try:
-                    new_occupant = Occupant(occupant.species, site)
+                        occupant.species.create_occupant(site)
                 except SiteFullException:
                     pass
         return False
@@ -313,7 +316,7 @@ class PredationBirthReaction(Reaction):
             # Because PredationBirthReaction kills one particle and creates another, SiteFullException is never raised.
             new_site = victim.site
             victim.destroy()
-            new_occupant = Occupant(occupant.species, new_site)
+            occupant.species.create_occupant(new_site)
 
         return False
 
@@ -379,14 +382,14 @@ class World:
             for site in self.lattice.sites:
                 for species, density in densities.items():
                     for _ in range(self.random_generator.poisson(density)):
-                        Occupant(species, site)
+                        species.create_occupant(site)
         else:
             N = self.lattice.nr_sites
             total_density = sum(densities.values())
             if total_density > self.lattice.carrying_capacity:
                 raise ValueError("Cannot place particles since total density of all species exceeds the carrying capacity.")
             
-            to_place = []
+            to_place: list[Species] = []
             for species, density in densities.items():
                 to_place.extend(int(N*density) * [species])
             self.random_generator.shuffle(to_place)
@@ -395,7 +398,7 @@ class World:
             self.random_generator.shuffle(candidate_sites)
 
             for species, site in zip(to_place, candidate_sites):
-                Occupant(species, site)
+                species.create_occupant(site)
 
 
     def iteration(self):

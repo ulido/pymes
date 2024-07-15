@@ -1,4 +1,4 @@
-from pypop import World, Species, Occupant, BirthReaction, DeathReaction, PredationReaction, PredationBirthReaction, Hop
+from pypop import World, Species, BirthReaction, DeathReaction, PredationReaction, PredationBirthReaction, Hop
 from pypop.pypop import Site, Lattice, Reaction, SiteFullException
 
 import numpy as np
@@ -13,7 +13,7 @@ def test_species():
 
     # Test occupant creation and correct species bookkeeping
     site = Site("site")
-    occupant = Occupant(species, site)
+    occupant = species.create_occupant(site)
     assert(species.members[0] == occupant)
     assert(len(species) == 1)
 
@@ -28,7 +28,7 @@ def test_species():
     assert(len(species) == 1)
 
     # Test second occupant addition and first removal (list bookkeeping)
-    second_occupant = Occupant(species, site)
+    second_occupant = species.create_occupant(site)
     assert(len(species) == 2)
     species.remove(occupant)
     assert(species.members[0] == second_occupant)
@@ -46,8 +46,8 @@ def test_site():
     assert(site.get_random_occupant(species, rng) is None)
     
     # Test occupant creation and on-site bookkeeping
-    first_occupant = Occupant(species, site)
-    second_occupant = Occupant(species, site)
+    first_occupant = species.create_occupant(site)
+    second_occupant = species.create_occupant(site)
     assert(site.species_abundance(species) == 2)
 
     # Test that we get a random occupant from the choice on the site
@@ -64,7 +64,7 @@ def test_occupant():
     species = Species("A")
     
     # Test occupant initialization, naming and bookkeeping
-    occupant = Occupant(species, site1)
+    occupant = species.create_occupant(site1)
     assert(hash(occupant) == occupant.id)
     assert(str(occupant) == f"{species.name}{occupant.id}")
     assert(species.members[0] == occupant)
@@ -136,7 +136,7 @@ def test_reactions(carrying_capacity):
     lattice = Lattice((2, 2), carrying_capacity=carrying_capacity)
     site = lattice.sites[0]
     other_site = lattice.sites[1]
-    occupant = Occupant(species, site)
+    occupant = species.create_occupant(site)
 
     # Test parameters
     rate = 0.6
@@ -173,7 +173,7 @@ def test_reactions(carrying_capacity):
     for _ in range(trials):
         if death_reaction(occupant, rng):
             successes += 1
-            occupant = Occupant(species, site)
+            occupant = species.create_occupant(site)
     assert(_binomial_expectation(successes, trials, rate))
 
     # Test PredationReaction initialization
@@ -187,7 +187,7 @@ def test_reactions(carrying_capacity):
     if carrying_capacity == 1:
         successes = 0
         for _ in range(trials):
-            prey = Occupant(prey_species, other_site)
+            prey = prey_species.create_occupant(other_site)
             assert(predation_reaction(occupant, rng) == False)
             if len(prey_species) == 0:
                 successes += 1
@@ -195,7 +195,7 @@ def test_reactions(carrying_capacity):
                 prey.destroy()
     else:
         for _ in range(trials):
-            Occupant(prey_species, site)
+            prey_species.create_occupant(site)
         assert(predation_reaction(occupant, rng) == False)
         successes = trials - len(prey_species)
     assert(_binomial_expectation(successes, trials, rate))
@@ -211,7 +211,7 @@ def test_reactions(carrying_capacity):
     if carrying_capacity == 1:
         successes = 0
         for _ in range(trials):
-            prey = Occupant(prey_species, other_site)
+            prey = prey_species.create_occupant(other_site)
             assert(predationbirth_reaction(occupant, rng) == False)
             if len(prey_species) == 0 and len(other_site.species_occupants[species]) == 1:
                 successes += 1
@@ -220,7 +220,7 @@ def test_reactions(carrying_capacity):
                 prey.destroy()
     else:
         for _ in range(trials):
-            Occupant(prey_species, site)
+            prey_species.create_occupant(site)
         assert(predationbirth_reaction(occupant, rng) == False)
         successes = trials - len(prey_species)
         assert(len(species) == successes + 1)
@@ -230,7 +230,7 @@ def test_birthreaction_singleoccupancy():
     species = Species("A")
     lattice = Lattice((2, 2), carrying_capacity=1)
     for site in lattice.sites:
-        Occupant(species, site)
+        species.create_occupant(site)
     
     rng = np.random.default_rng()
     BirthReaction(species, 1.0)(lattice.sites[0].species_occupants[species][0], rng)
@@ -242,7 +242,7 @@ def test_hop():
     lattice = Lattice((2, 2))
     initial_site = lattice.sites[0]
     rng = np.random.default_rng()
-    occupant = Occupant(species, initial_site)
+    occupant = species.create_occupant(initial_site)
     
     # Test hop reaction initialization
     hop = Hop(species, 1.0)
@@ -258,14 +258,12 @@ def test_carrying_capacity():
 
     rng = np.random.default_rng()
 
-    occupant1 = Occupant(species, site)
-    occupant2 = Occupant(species, site)
+    occupant1 = species.create_occupant(site)
+    occupant2 = species.create_occupant(site)
     with raises(SiteFullException):
-        Occupant(species, site)
+        species.create_occupant(site)
 
-    occupant3 = Occupant(species, second_site)
-    # with raises(SiteFullException):
-    #     occupant3.set_site(site)
+    occupant3 = species.create_occupant(second_site)
     
     Hop(species, 1.0)(occupant3, rng)
     assert(occupant3.site == second_site)
@@ -277,7 +275,7 @@ def test_carrying_capacity():
     occupant2.destroy()
 
     prey_species = Species("B")
-    Occupant(prey_species, site)
+    prey_species.create_occupant(site)
     PredationBirthReaction(species, prey_species, 1.0)(occupant1, rng)
     # Because PredationBirthReaction kills one particle and creates another, SiteFullException is never raised.
     assert(len(species) == 2)
@@ -296,8 +294,8 @@ def test_swap_sites():
     rng = np.random.default_rng()
     hop = Hop(species, 1.0)
 
-    occupant1 = Occupant(species, first_site)
-    occupant2 = Occupant(species, second_site)
+    occupant1 = species.create_occupant(first_site)
+    occupant2 = species.create_occupant(second_site)
 
     hop(occupant1, rng)
     assert(occupant1.site == second_site)
