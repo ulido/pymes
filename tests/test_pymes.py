@@ -1,5 +1,5 @@
-from pypop import World, Species, BirthReaction, DeathReaction, PredationReaction, PredationBirthReaction, Hop
-from pypop.pypop import Site, Lattice, Reaction, SiteFullException
+from pymes import World, Species, BirthReaction, DeathReaction, PredationReaction, PredationBirthReaction, Hop
+from pymes.pymes import Site, Lattice, Reaction, SiteFullException
 
 import numpy as np
 import pytest

@@ -1,4 +1,4 @@
-name: PyPop
+name: pymes
 dependencies:
   - python=3.12
   - matplotlib
@@ -7,4 +7,4 @@ dependencies:
   - scipy
   - pip
   - pip:
-    - git+https://github.com/ulido/pypop
+    - git+https://github.com/ulido/pymes
