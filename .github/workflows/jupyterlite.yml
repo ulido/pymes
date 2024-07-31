@@ -21,6 +21,9 @@ jobs:
       - name: Install the dependencies
         run: |
           python -m pip install "jupyterlite-core==0.3.0" "jupyterlab~=4.1.6" "notebook~=7.1.2" "jupyterlite-pyodide-kernel==0.3.2" "ipywidgets>=8.1.1,<9"
+      - name: Mark notebook files as read-only
+        run: |
+          chmod a-wx examples/*.ipynb
       - name: Build the JupyterLite site
         run: |
           cp README.md examples
