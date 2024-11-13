@@ -32,7 +32,7 @@ class Species:
         occupant._species_index = len(self.members)
         self.members.append(occupant)
 
-    def create_occupant(self, initial_site: Site) -> Occupant:
+    def create_occupant(self, initial_site: Site, parent: Occupant | None=None, rng: np.random.Generator=None) -> Occupant:
         return Occupant(self, initial_site)
 
     def remove(self, occupant: Occupant):
@@ -203,7 +203,7 @@ class Reaction:
         """Initialize reaction with the given `rate`."""
         self.rate = rate
 
-    def decide(self, rng: np.random.Generator):
+    def decide(self, participants: list[Occupant], rng: np.random.Generator):
         """Decide if the reaction takes place by generating a random number from the generator `rng`."""
         return (self.rate >= 1.0) or (rng.random() < self.rate)
 
@@ -223,18 +223,18 @@ class BirthReaction(Reaction):
     def __call__(self, occupant: Occupant, rng: np.random.Generator) -> bool:
         """Decides if birth reaction occurs for the given `occupant` (using the random generator `rng`) and if yes, generates a new occupant of the same species at the `occupant`'s site. Returns `False` because the `occupant` will never be destroyed in a birth reaction."""
         site = occupant.site
-        if self.decide(rng):
+        if self.decide([occupant], rng):
             if site.carrying_capacity == 1:
                 # Try every neighbor site until we find an empty one (if there is one).
                 for new_site in rng.choice(site.neighbors, size=len(site.neighbors)):
                     try:
-                        occupant.species.create_occupant(new_site)
+                        occupant.species.create_occupant(new_site, occupant, rng)
                     except SiteFullException:
                         continue
                     break
             else:
                 try:
-                        occupant.species.create_occupant(site)
+                        occupant.species.create_occupant(site, occupant, rng)
                 except SiteFullException:
                     pass
         return False
@@ -250,7 +250,7 @@ class DeathReaction(Reaction):
 
     def __call__(self, occupant: Occupant, rng: np.random.Generator) -> bool:
         """Decides if death reaction occurs for the given `occupant` (using the random generator `rng`) and if yes, destroys the `occupant`. Returns `True` if the `occupant` was destroyed, `False` otherwise."""
-        if self.decide(rng):
+        if self.decide([occupant], rng):
             occupant.destroy()
             return True
         return False
@@ -279,7 +279,7 @@ class PredationReaction(Reaction):
         # Otherwise the list we are iterating over will change during iteration!
         to_destroy: list[Occupant] = []
         for victim in potential_victims:
-            if self.decide(rng):
+            if self.decide([occupant, victim], rng):
                 to_destroy.append(victim)
         for victim in to_destroy:
             victim.destroy()
@@ -310,13 +310,13 @@ class PredationBirthReaction(Reaction):
         # Otherwise the list we are iterating over will change during iteration!
         to_destroy: list[Occupant] = []
         for victim in potential_victims:
-            if self.decide(rng):
+            if self.decide([occupant, victim], rng):
                 to_destroy.append(victim)
         for victim in to_destroy:
             # Because PredationBirthReaction kills one particle and creates another, SiteFullException is never raised.
             new_site = victim.site
             victim.destroy()
-            occupant.species.create_occupant(new_site)
+            occupant.species.create_occupant(new_site, occupant, rng)
 
         return False
 
@@ -331,7 +331,7 @@ class Hop(Reaction):
 
     def __call__(self, occupant: Occupant, rng: np.random.Generator):
         """Hop the given `occupant` from its original site to the site with neighbor index `destination_index` (between 0 and 3 inclusive)."""
-        if self.decide(rng):
+        if self.decide([occupant], rng):
             site = occupant.site
             destination: Site = rng.choice(site.neighbors)
             if site.carrying_capacity == 1:
@@ -382,7 +382,7 @@ class World:
             for site in self.lattice.sites:
                 for species, density in densities.items():
                     for _ in range(self.random_generator.poisson(density)):
-                        species.create_occupant(site)
+                        species.create_occupant(site, None, self.random_generator)
         else:
             N = self.lattice.nr_sites
             total_density = sum(densities.values())
@@ -398,7 +398,7 @@ class World:
             self.random_generator.shuffle(candidate_sites)
 
             for species, site in zip(to_place, candidate_sites):
-                species.create_occupant(site)
+                species.create_occupant(site, None, self.random_generator)
 
 
     def iteration(self):
