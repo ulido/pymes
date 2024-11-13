@@ -1,14 +1,13 @@
-name: build-env
+name: xeus-python-kernel
 channels:
+  - https://repo.mamba.pm/emscripten-forge
   - conda-forge
-dependencies:
-  - python
+  dependencies:
+  - python-3.11
   - pip
-  - jupyter_server
-  - jupyterlite-core >=0.4.1,<0.5.0
-  - jupyterlite-xeus>=2.0.0,<3
-  - matplotlib
+  - xeus-python
   - ipywidgets
+  - matplotlib
   - tqdm
   - scipy
   - pip:
